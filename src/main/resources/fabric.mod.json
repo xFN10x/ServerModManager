@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "smm",
+  "version": "${version}",
+  "name": "ServerModManager",
+  "description": "A Minecraft Mod that lets you manage your mods in a web interface. Made for server owners.",
+  "authors": [],
+  "contact": {},
+  "license": "GPL-3.0",
+  "icon": "assets/smm/icon.png",
+  "environment": "server",
+  "entrypoints": {
+    "main": [
+      "fn10.smm.ModManager"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "fabric-api": "*",
+    "minecraft": "${minecraft_version}"
+  }
+}
