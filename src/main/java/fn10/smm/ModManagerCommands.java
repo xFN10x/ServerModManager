@@ -5,18 +5,30 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import fn10.smm.server.ModManagerWebServer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
-import net.minecraft.client.Screenshot;
 import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
-import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.network.chat.Style;
 import net.minecraft.server.permissions.Permissions;
+
+import java.net.URI;
 
 public class ModManagerCommands implements CommandRegistrationCallback {
 
     private static ModManagerWebServer currentServer;
-
+    public static final Command<CommandSourceStack> stopCommand = css -> {
+        final CommandSourceStack src = css.getSource();
+        if (ModManagerWebServer.isServerRunning()) {
+            currentServer.stop();
+            src.sendSuccess(() -> Component.literal("Stopped web server"), true);
+            return 1;
+        } else {
+            src.sendFailure(Component.literal("No web server is running."));
+            return 0;
+        }
+    };
     public static final Command<CommandSourceStack> startCommand = css -> {
         final CommandSourceStack src = css.getSource();
         Integer port = 8880;
@@ -25,18 +37,28 @@ public class ModManagerCommands implements CommandRegistrationCallback {
         } catch (Exception ignored) {
         }
         final Integer finalPort = port;
-        src.sendSystemMessage(Component.literal("Starting web server at port: " + finalPort));
+        final URI uri = URI.create("http://localhost:" + finalPort);
+        src.sendSystemMessage(Component.literal("Starting web server at ").append(
+                Component.literal(uri.toString())
+                        .withStyle(Style.EMPTY
+                                .withUnderlined(true)
+                                .withClickEvent(new ClickEvent.OpenUrl(uri)))));
         if (ModManagerWebServer.isServerRunning()) {
             src.sendFailure(Component.literal("Failed to start web server. Server is already running."));
             return 0;
         } else {
-           try {
+            try {
                 currentServer = new ModManagerWebServer(port, src.getServer());
                 currentServer.start();
-               src.sendSuccess(() -> Component.literal("Server started at localhost:" + finalPort), true);
+                src.sendSuccess(() -> Component.literal("Server started at ")
+                        .append(
+                                Component.literal(uri.toString())
+                                        .withStyle(Style.EMPTY
+                                                .withUnderlined(true)
+                                                .withClickEvent(new ClickEvent.OpenUrl(uri)))), true);
             } catch (Exception e) {
-               src.sendFailure(Component.literal("Failed to start web server. See log for details."));
-           }
+                src.sendFailure(Component.literal("Failed to start web server. See log for details."));
+            }
         }
         return 1;
     };
@@ -53,22 +75,20 @@ public class ModManagerCommands implements CommandRegistrationCallback {
                                 Commands.literal("start")
                                         .requires(src -> src.permissions().hasPermission(Permissions.COMMANDS_ADMIN))
                                         .executes(startCommand)
-                                        .then(Commands.argument("port", IntegerArgumentType.integer(1,65535))
+                                        .then(Commands.argument("port", IntegerArgumentType.integer(1, 65535))
                                                 .executes(startCommand))
 
                         ).then(
                                 Commands.literal("stop")
                                         .requires(src -> src.permissions().hasPermission(Permissions.COMMANDS_ADMIN))
+                                        .executes(stopCommand)
+                        ).then(
+                                Commands.literal("restart")
+                                        .requires(src -> src.permissions().hasPermission(Permissions.COMMANDS_ADMIN))
                                         .executes(css -> {
-                                            final CommandSourceStack src = css.getSource();
-                                            if (ModManagerWebServer.isServerRunning()) {
-                                                currentServer.stop();
-                                                src.sendSuccess(() -> Component.literal("Stopped web server"), true);
-                                                return 1;
-                                            } else {
-                                                src.sendFailure(Component.literal("No web server is running."));
-                                                return 0;
-                                            }
+                                            stopCommand.run(css);
+                                            startCommand.run(css);
+                                            return 0;
                                         })
                         )
         );
