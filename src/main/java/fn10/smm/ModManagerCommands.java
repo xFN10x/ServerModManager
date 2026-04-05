@@ -2,11 +2,15 @@ package fn10.smm;
 
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
+import fn10.smm.server.ModManagerWebServer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.minecraft.client.Screenshot;
 import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.permissions.Permissions;
 
 public class ModManagerCommands implements CommandRegistrationCallback {
@@ -20,15 +24,16 @@ public class ModManagerCommands implements CommandRegistrationCallback {
             port = css.getArgument("port", Integer.class);
         } catch (Exception ignored) {
         }
-        src.sendSystemMessage(Component.literal("Starting web server at port: " + port));
+        final Integer finalPort = port;
+        src.sendSystemMessage(Component.literal("Starting web server at port: " + finalPort));
         if (ModManagerWebServer.isServerRunning()) {
-            src.sendFailure(Component.literal("Failed to start web server. See log for details."));
-            return 1;
+            src.sendFailure(Component.literal("Failed to start web server. Server is already running."));
+            return 0;
         } else {
            try {
-                currentServer = new ModManagerWebServer(port);
+                currentServer = new ModManagerWebServer(port, src.getServer());
                 currentServer.start();
-               src.sendSystemMessage(Component.literal("Server started at localhost:" + port));
+               src.sendSuccess(() -> Component.literal("Server started at localhost:" + finalPort), true);
             } catch (Exception e) {
                src.sendFailure(Component.literal("Failed to start web server. See log for details."));
            }
@@ -48,6 +53,23 @@ public class ModManagerCommands implements CommandRegistrationCallback {
                                 Commands.literal("start")
                                         .requires(src -> src.permissions().hasPermission(Permissions.COMMANDS_ADMIN))
                                         .executes(startCommand)
+                                        .then(Commands.argument("port", IntegerArgumentType.integer(1,65535))
+                                                .executes(startCommand))
+
+                        ).then(
+                                Commands.literal("stop")
+                                        .requires(src -> src.permissions().hasPermission(Permissions.COMMANDS_ADMIN))
+                                        .executes(css -> {
+                                            final CommandSourceStack src = css.getSource();
+                                            if (ModManagerWebServer.isServerRunning()) {
+                                                currentServer.stop();
+                                                src.sendSuccess(() -> Component.literal("Stopped web server"), true);
+                                                return 1;
+                                            } else {
+                                                src.sendFailure(Component.literal("No web server is running."));
+                                                return 0;
+                                            }
+                                        })
                         )
         );
     }

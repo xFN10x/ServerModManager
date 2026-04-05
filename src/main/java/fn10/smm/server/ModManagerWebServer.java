@@ -1,6 +1,7 @@
-package fn10.smm;
+package fn10.smm.server;
 
 import net.freeutils.httpserver.HTTPServer;
+import net.minecraft.server.MinecraftServer;
 
 import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
@@ -12,6 +13,7 @@ public class ModManagerWebServer {
     public final int port;
     public final HTTPServer server;
     private HttpClient client = null;
+    private final MinecraftServer mcServer;
     private static boolean webServerRunning;
 
     public HttpClient getClient() {
@@ -20,10 +22,26 @@ public class ModManagerWebServer {
 
     public static boolean isServerRunning() {return webServerRunning;}
 
-    public ModManagerWebServer(int port) {
+    public ModManagerWebServer(int port, MinecraftServer server) {
         this.port = port;
         this.server = new HTTPServer();
         server.setPort(this.port);
+        this.mcServer = server;
+    }
+
+    public void stop() {
+        try {
+            LOG.error("Stopping web server...");
+            client.close();
+
+            if (webServerRunning) webServerRunning = false;
+
+            server.stop();
+            LOG.error("Stopped web server.");
+        } catch (Exception e) {
+            LOG.error("Failed to stop web server", e);
+            throw e;
+        }
     }
 
     public void start() throws Exception {
@@ -34,11 +52,7 @@ public class ModManagerWebServer {
             client = HttpClient.newBuilder().version(HttpClient.Version.HTTP_2).build();
 
             final HTTPServer.VirtualHost host = server.getVirtualHost(null);
-            host.addContext("/", (req, resp) -> {
-                resp.getBody().write("yo, world".getBytes(StandardCharsets.UTF_8));
-                resp.send(200, "where is this");
-                return 0;
-            });
+            host.addContexts(new ModManagerHandlers(mcServer));
             LOG.info("Started web server at: {}", port);
             webServerRunning = true;
         } catch (Exception e) {
