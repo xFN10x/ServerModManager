@@ -1,5 +1,6 @@
 package fn10.smm.server;
 
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.freeutils.httpserver.HTTPServer;
 import net.minecraft.server.MinecraftServer;
 
@@ -15,6 +16,12 @@ public class ModManagerWebServer {
     private HttpClient client = null;
     private final MinecraftServer mcServer;
     private static boolean webServerRunning;
+    private static ModManagerWebServer current = null;
+
+    public static ServerLifecycleEvents.ServerStopping StoppingEvent = ser -> {
+        if (current != null)
+            current.stop();
+    };
 
     public HttpClient getClient() {
         return client;
@@ -22,22 +29,23 @@ public class ModManagerWebServer {
 
     public static boolean isServerRunning() {return webServerRunning;}
 
-    public ModManagerWebServer(int port, MinecraftServer server) {
+    public ModManagerWebServer(int port, MinecraftServer mcServer) {
         this.port = port;
         this.server = new HTTPServer();
         server.setPort(this.port);
-        this.mcServer = server;
+        this.mcServer = mcServer;
     }
 
     public void stop() {
         try {
-            LOG.error("Stopping web server...");
+            LOG.info("Stopping web server...");
+            if (current == this) current = null;
             client.close();
 
             if (webServerRunning) webServerRunning = false;
 
             server.stop();
-            LOG.error("Stopped web server.");
+            LOG.info("Stopped web server.");
         } catch (Exception e) {
             LOG.error("Failed to stop web server", e);
             throw e;
@@ -47,9 +55,9 @@ public class ModManagerWebServer {
     public void start() throws Exception {
         try {
             LOG.info("Starting web server...");
-
+            current = this;
             server.start();
-            client = HttpClient.newBuilder().version(HttpClient.Version.HTTP_2).build();
+            client = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build();
 
             final HTTPServer.VirtualHost host = server.getVirtualHost(null);
             host.addContexts(new ModManagerHandlers(mcServer));
