@@ -10,6 +10,10 @@ import java.nio.charset.StandardCharsets;
 public class ModManagerHandlers {
     private final MinecraftServer server;
 
+    public ModManagerHandlers() {
+        server = null;
+    }
+
     public ModManagerHandlers(MinecraftServer server) {
         this.server = server;
     }
@@ -30,15 +34,27 @@ public class ModManagerHandlers {
         return 0;
     }
 
-    @HTTPServer.Context("test")
+    @HTTPServer.Context("/detail/{*}")
     public int test(HTTPServer.Request req, HTTPServer.Response resp) throws IOException {
-        resp.send(200, server.getModdedStatus().fullDescription());
+        final String parsed = req.getPath().replace("/detail/", "");
+        switch (parsed) {
+            case "stype":
+                resp.send(200, server.getServerModName());
+                return 0;
+            case "motd":
+                resp.send(200, server.getMotd());
+                return 0;
+            case "plrs":
+                resp.send(200, server.getPlayerCount() + "/" + server.getMaxPlayers());
+                return 0;
+        }
+        resp.send(404, "Detail: '" + parsed + "' not found");
         return 0;
     }
 
-    @HTTPServer.Context("/getfile{*}")
+    @HTTPServer.Context("/{*}")
     public int getFile(HTTPServer.Request req, HTTPServer.Response resp) throws IOException {
-        final String parsed = req.getPath().replace("/getfile/", "");
+        final String parsed = req.getPath().replaceFirst("/", "");
         try {
             final String string = getPageAsString(parsed);
 
